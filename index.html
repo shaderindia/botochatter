@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Boto - Connect with Friends</title>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm"></script>
+  <style>
+    body { font-family: sans-serif; margin: 0; background: #f0f2f5; }
+    .container { max-width: 600px; margin: auto; padding: 1rem; }
+    h1 { text-align: center; }
+    form { margin-bottom: 1rem; }
+    input, textarea, button {
+      display: block; width: 100%; padding: 0.5rem;
+      margin-top: 0.5rem; box-sizing: border-box;
+    }
+    .post { background: white; padding: 1rem; margin-bottom: 1rem; border-radius: 5px; }
+    .post .author { font-weight: bold; margin-bottom: 0.5rem; }
+    #logoutBtn { background: #d9534f; color: white; margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Boto</h1>
+
+    <div id="auth-section">
+      <h2>Login / Signup</h2>
+      <form id="auth-form">
+        <input type="email" id="email" placeholder="Email" required />
+        <input type="password" id="password" placeholder="Password" required />
+        <button type="submit">Login / Signup</button>
+      </form>
+    </div>
+
+    <div id="app-section" style="display:none;">
+      <button id="logoutBtn">Logout</button>
+      
+      <h2>Create Post</h2>
+      <form id="post-form">
+        <textarea id="content" placeholder="What's on your mind?" required></textarea>
+        <button type="submit">Post</button>
+      </form>
+
+      <h2>Feed</h2>
+      <div id="posts"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+
+    const supabaseUrl = 'https://ypdajzwxnvypazbwslzx.supabase.co';
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlwZGFqend4bnZ5cGF6YndzbHp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE4MzAwMjAsImV4cCI6MjA2NzQwNjAyMH0.XE9-64EwC7Zicw6fgUU8SDfl3hKln_jaE5mrcZ01tqU';
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const authSection = document.getElementById('auth-section');
+    const appSection = document.getElementById('app-section');
+    const authForm = document.getElementById('auth-form');
+    const postForm = document.getElementById('post-form');
+    const postsContainer = document.getElementById('posts');
+    const logoutBtn = document.getElementById('logoutBtn');
+
+    async function checkSession() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        showApp();
+      } else {
+        showAuth();
+      }
+    }
+
+    authForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+
+      // Try to sign in
+      let { error } = await supabase.auth.signInWithPassword({ email, password });
+
+      // If no user, try to sign up
+      if (error) {
+        const { error: signUpError } = await supabase.auth.signUp({ email, password });
+        if (signUpError) return alert('Signup error: ' + signUpError.message);
+        alert('Signup successful. Check your email to confirm.');
+      }
+
+      showApp();
+    });
+
+    logoutBtn.addEventListener('click', async () => {
+      await supabase.auth.signOut();
+      showAuth();
+    });
+
+    postForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const content = document.getElementById('content').value;
+      const { data: user } = await supabase.auth.getUser();
+
+      const { error } = await supabase
+        .from('posts')
+        .insert({ content, author: user.user.email });
+
+      if (error) return alert('Error creating post: ' + error.message);
+      document.getElementById('content').value = '';
+      loadPosts();
+    });
+
+    async function loadPosts() {
+      const { data, error } = await supabase
+        .from('posts')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      postsContainer.innerHTML = '';
+      if (error) return (postsContainer.innerHTML = 'Error loading posts.');
+
+      data.forEach(post => {
+        const div = document.createElement('div');
+        div.className = 'post';
+        div.innerHTML = `
+          <div class="author">${post.author}</div>
+          <div>${post.content}</div>
+        `;
+        postsContainer.appendChild(div);
+      });
+    }
+
+    function showApp() {
+      authSection.style.display = 'none';
+      appSection.style.display = 'block';
+      loadPosts();
+    }
+
+    function showAuth() {
+      authSection.style.display = 'block';
+      appSection.style.display = 'none';
+    }
+
+    checkSession();
+  </script>
+</body>
+</html>
